@@ -1,6 +1,6 @@
-# benchmark-zig
+# benchmark
 
-Simple benchmarking library
+Simple benchmarking library for Zig projects
 
 # Components
 
@@ -28,7 +28,7 @@ zig build test --summary all
 
 ## Install
 ```
-zig fetch --save git+https://github.com/0x6a62/benchmark-zig.git
+zig fetch --save git+https://github.com/0x6a62/benchmark.git
 ```
 
 ## Add to your `build.zig`
