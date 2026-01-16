@@ -17,7 +17,7 @@ pub fn main() !void {
     // Example 1
 
     {
-        var bench = try benchmark.Benchmark().init(allocator, 1);
+        var bench = try benchmark.Benchmark().init(allocator, .{ .size = 1 });
         const results = try bench.run("example1", 2, example1);
         print("{s}: {d} {d} {d}\n", .{ results.name, results.avg, results.min, results.max });
     }
@@ -26,7 +26,7 @@ pub fn main() !void {
     // Example 2
 
     {
-        var bench = try benchmark.Benchmark().init(allocator, 2);
+        var bench = try benchmark.Benchmark().init(allocator, .{ .size = 2 });
         _ = try bench.run("example1", 2, example1);
         _ = try bench.run("example2", 2, example1);
         try bench.printResults(stdout);
@@ -36,7 +36,7 @@ pub fn main() !void {
     // Example 3
 
     {
-        var bench = try benchmark.Benchmark().init(allocator, 3);
+        var bench = try benchmark.Benchmark().init(allocator, .{ .size = 3 });
 
         {
             try bench.start("example3");

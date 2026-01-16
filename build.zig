@@ -132,6 +132,16 @@ pub fn build(b: *std.Build) void {
         .root_module = exe.root_module,
     });
 
+    const test_options = b.addOptions();
+    // Benchmark supports running in two modes.
+    // - ./zig/zig build test
+    // - ./zig/zig build --Doptimize=ReleaseFast fast test -- benchmark
+    test_options.addOption(bool, "benchmark", for (b.args orelse &.{}) |arg| {
+        if (std.mem.indexOf(u8, arg, "benchmark") != null) break true;
+    } else false);
+    // mod.root_module.addOptions("test_options", test_options);
+    mod.addOptions("test_options", test_options);
+
     // A run step that will run the second test executable.
     const run_exe_tests = b.addRunArtifact(exe_tests);
 

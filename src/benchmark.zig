@@ -25,11 +25,24 @@ const Result = struct {
 
 const FnInterface = fn () void;
 
+/// Benchmark mode
+pub const Mode = enum {
+    smoke,
+    benchmark,
+};
+
+/// Benchmark config
+const Config = struct {
+    mode: Mode = .benchmark,
+    size: usize = 1,
+};
+
 /// Benchmarking
 pub fn Benchmark() type {
     return struct {
         _timer: std.time.Timer,
         _current_name: []const u8,
+        _mode: Mode,
         results: []Result,
         current: usize,
         size: usize,
@@ -37,7 +50,10 @@ pub fn Benchmark() type {
         const Self = @This();
 
         /// Init
-        pub fn init(allocator: Allocator, comptime size: usize) !Self {
+        pub fn init(allocator: Allocator, config: Config) !Self {
+            const size = config.size;
+            const mode = config.mode;
+
             const results = try allocator.alloc(Result, size);
             for (0..size) |i| {
                 results[i] = Result.empty();
@@ -46,6 +62,7 @@ pub fn Benchmark() type {
             return Self{
                 ._timer = try std.time.Timer.start(),
                 ._current_name = "",
+                ._mode = mode,
                 .results = results,
                 .current = 0,
                 .size = size,
@@ -162,6 +179,11 @@ pub fn Benchmark() type {
 ////////
 // Tests
 
+/// Get benchmarking mode
+fn getMode() Mode {
+    return if (@import("test_options").benchmark) .benchmark else .smoke;
+}
+
 /// Example function for testing benchmark
 fn example() void {
     std.debug.print("example\n", .{});
@@ -176,7 +198,7 @@ test "Example usage - One run" {
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
-    var bench = try Benchmark().init(allocator, 1);
+    var bench = try Benchmark().init(allocator, .{ .mode = getMode(), .size = 1 });
     defer bench.deinit(allocator);
     const results = try bench.run("example", 2, example);
     // try stdout.print("{s}: {d} {d} {d}\n", .{ results.name, results.avg, results.min, results.max });
@@ -196,7 +218,7 @@ test "Example usage - Multiple runs " {
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
-    var bench = try Benchmark().init(allocator, 2);
+    var bench = try Benchmark().init(allocator, .{ .mode = getMode(), .size = 2 });
     defer bench.deinit(allocator);
 
     _ = try bench.run("example1", 2, example);
@@ -208,7 +230,7 @@ test "Example usage - Multiple runs " {
     try stdout.flush();
 }
 
-test "Example usage - Seperate blocks" {
+test "Example usage - Separate blocks" {
     var da = std.heap.DebugAllocator(.{}){};
     defer _ = da.deinit();
     const allocator = da.allocator();
@@ -217,7 +239,7 @@ test "Example usage - Seperate blocks" {
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
-    var bench = try Benchmark().init(allocator, 3);
+    var bench = try Benchmark().init(allocator, .{ .mode = getMode(), .size = 3 });
     defer bench.deinit(allocator);
 
     {
