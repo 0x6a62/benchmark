@@ -1,3 +1,5 @@
+// Example usage
+
 const std = @import("std");
 const benchmark = @import("benchmark");
 const Allocator = std.mem.Allocator;
