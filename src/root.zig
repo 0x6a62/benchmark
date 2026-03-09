@@ -148,7 +148,11 @@ pub fn Benchmark() type {
         }
 
         /// Print results
-        pub fn printResults(self: Self, writer: *std.Io.Writer) !void {
+        pub fn printResults(self: Self, writer: *std.Io.Writer, header: []const u8) !void {
+            if (header.len > 0) {
+                try writer.print("# {s}\n", .{header});
+            }
+
             try writer.print("{s:<20} {s:>15} {s:>15} {s:>15} {s:>10}\n", .{
                 "Name",
                 "Average (ns)",
@@ -156,6 +160,7 @@ pub fn Benchmark() type {
                 "Max (ns)",
                 "Diff",
             });
+
             try writer.print("-------------------------------------------------------------------------------\n", .{});
 
             const base = self.results[0];
@@ -180,7 +185,7 @@ pub fn Benchmark() type {
 // Tests
 
 /// Get benchmarking mode
-fn getMode() Mode {
+pub fn getMode() Mode {
     return if (@import("test_options").benchmark) .benchmark else .smoke;
 }
 
@@ -231,13 +236,16 @@ test "Example usage - Multiple runs " {
 }
 
 test "Example usage - Separate blocks" {
+    // This test would only run in benchmark mode
+    //if (getMode() == .smoke) return;
+
     var da = std.heap.DebugAllocator(.{}){};
     defer _ = da.deinit();
     const allocator = da.allocator();
 
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-    const stdout = &stdout_writer.interface;
+    var stderr_buffer: [1024]u8 = undefined;
+    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+    const stderr = &stderr_writer.interface;
 
     var bench = try Benchmark().init(allocator, .{ .mode = getMode(), .size = 3 });
     defer bench.deinit(allocator);
@@ -258,7 +266,17 @@ test "Example usage - Separate blocks" {
         _ = bench.stop();
     }
 
-    // try bench.printResults(stdout);
+    try bench.printResults(stderr, "Examples");
 
-    try stdout.flush();
+    try stderr.flush();
+}
+
+test "benchmark parameter test" {
+    // Example: zig build test -- benchmark
+
+    std.debug.print("MODE: {any}\n", .{getMode()});
+
+    if (getMode() == .smoke) return;
+
+    std.debug.print("running a fake benchmark...\n", .{});
 }

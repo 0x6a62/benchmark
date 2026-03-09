@@ -59,5 +59,7 @@ mod.root_module.addOptions("test_options", test_options);
 ## Using in code
 ```
 const benchmark = @import("benchmark");
+
+if (benchmark.getMode() == .smoke) return;
 ```
 
