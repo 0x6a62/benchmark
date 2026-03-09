@@ -185,7 +185,7 @@ pub fn Benchmark() type {
 // Tests
 
 /// Get benchmarking mode
-pub fn getMode() Mode {
+fn getBenchmarkMode() Mode {
     return if (@import("test_options").benchmark) .benchmark else .smoke;
 }
 
@@ -203,7 +203,7 @@ test "Example usage - One run" {
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
-    var bench = try Benchmark().init(allocator, .{ .mode = getMode(), .size = 1 });
+    var bench = try Benchmark().init(allocator, .{ .mode = getBenchmarkMode(), .size = 1 });
     defer bench.deinit(allocator);
     const results = try bench.run("example", 2, example);
     // try stdout.print("{s}: {d} {d} {d}\n", .{ results.name, results.avg, results.min, results.max });
@@ -223,7 +223,7 @@ test "Example usage - Multiple runs " {
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
     const stdout = &stdout_writer.interface;
 
-    var bench = try Benchmark().init(allocator, .{ .mode = getMode(), .size = 2 });
+    var bench = try Benchmark().init(allocator, .{ .mode = getBenchmarkMode(), .size = 2 });
     defer bench.deinit(allocator);
 
     _ = try bench.run("example1", 2, example);
@@ -247,7 +247,7 @@ test "Example usage - Separate blocks" {
     var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
     const stderr = &stderr_writer.interface;
 
-    var bench = try Benchmark().init(allocator, .{ .mode = getMode(), .size = 3 });
+    var bench = try Benchmark().init(allocator, .{ .mode = getBenchmarkMode(), .size = 3 });
     defer bench.deinit(allocator);
 
     {
@@ -274,9 +274,9 @@ test "Example usage - Separate blocks" {
 test "benchmark parameter test" {
     // Example: zig build test -- benchmark
 
-    std.debug.print("MODE: {any}\n", .{getMode()});
+    std.debug.print("MODE: {any}\n", .{getBenchmarkMode()});
 
-    if (getMode() == .smoke) return;
+    if (getBenchmarkMode() == .smoke) return;
 
     std.debug.print("running a fake benchmark...\n", .{});
 }

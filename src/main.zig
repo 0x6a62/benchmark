@@ -31,7 +31,7 @@ pub fn main() !void {
         var bench = try benchmark.Benchmark().init(allocator, .{ .size = 2 });
         _ = try bench.run("example1", 2, example1);
         _ = try bench.run("example2", 2, example1);
-        try bench.printResults(stdout);
+        try bench.printResults(stdout, "Example 2");
     }
 
     ////////////
@@ -56,7 +56,7 @@ pub fn main() !void {
             _ = bench.stop();
         }
 
-        try bench.printResults(stdout);
+        try bench.printResults(stdout, "Example 3");
     }
 
     try stdout.print("### done\n", .{});
