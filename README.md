@@ -11,7 +11,7 @@ Simple benchmarking library for Zig projects
 
 # Development
 
-Zig target version: 0.15.2
+Zig target version: 0.16.0
 
 ```
 # Build
@@ -60,6 +60,6 @@ mod.root_module.addOptions("test_options", test_options);
 ```
 const benchmark = @import("benchmark");
 
-if (benchmark.getMode() == .smoke) return;
+if (benchmark.getMode() != .benchmark) return;
 ```
 

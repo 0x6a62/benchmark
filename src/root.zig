@@ -4,14 +4,20 @@
 const std = @import("std");
 const math = std.math;
 const Allocator = std.mem.Allocator;
+const Io = std.Io;
+
+/// Benchmark errors
+pub const BenchmarkError = error{
+    InvalidReportPath,
+};
 
 /// Benchmarking results
 /// Times are in ns
 const Result = struct {
     name: []const u8,
-    avg: u64,
-    min: u64,
-    max: u64,
+    avg: i96,
+    min: i96,
+    max: i96,
 
     pub fn empty() Result {
         return Result{
@@ -27,7 +33,9 @@ const FnInterface = fn () void;
 
 /// Benchmark mode
 pub const Mode = enum {
+    /// Don't run benchmarks
     smoke,
+    /// Run benchmarks
     benchmark,
 };
 
@@ -40,7 +48,7 @@ const Config = struct {
 /// Benchmarking
 pub fn Benchmark() type {
     return struct {
-        _timer: std.time.Timer,
+        _timer: Io.Timestamp,
         _current_name: []const u8,
         _mode: Mode,
         results: []Result,
@@ -50,7 +58,7 @@ pub fn Benchmark() type {
         const Self = @This();
 
         /// Init
-        pub fn init(allocator: Allocator, config: Config) !Self {
+        pub fn init(io: Io, allocator: Allocator, config: Config) !Self {
             const size = config.size;
             const mode = config.mode;
 
@@ -60,7 +68,7 @@ pub fn Benchmark() type {
             }
 
             return Self{
-                ._timer = try std.time.Timer.start(),
+                ._timer = Io.Timestamp.now(io, Io.Clock.awake),
                 ._current_name = "",
                 ._mode = mode,
                 .results = results,
@@ -76,29 +84,29 @@ pub fn Benchmark() type {
 
         /// Run a function, and record execution time
         /// Supports running multiple times, in order to get avg, etc.
-        pub fn run(self: *Self, name: []const u8, comptime iterations: usize, f: *const FnInterface) !Result {
+        pub fn run(self: *Self, io: Io, name: []const u8, comptime iterations: usize, f: *const FnInterface) !Result {
             std.debug.assert(self.current < self.size);
 
-            var results = [_]u64{0} ** iterations;
+            var results = [_]i96{0} ** iterations;
 
-            var timer = try std.time.Timer.start();
+            var timer = Io.Timestamp.now(io, Io.Clock.awake);
             for (0..iterations) |i| {
                 // Setup
-                timer.reset();
+                timer = Io.Timestamp.now(io, Io.Clock.awake);
 
                 // Run
                 f();
-                const t = timer.lap();
-                results[i] = t;
+                const t = timer.untilNow(io, Io.Clock.awake);
+                results[i] = t.toNanoseconds();
 
                 // Cleanup
             }
 
             // Calculate avg, min, max, etc for a function's multiple executions
-            var avg: u64 = std.math.maxInt(u64);
-            var min: u64 = std.math.maxInt(u64);
-            var max: u64 = 0;
-            var sum: u64 = 0;
+            var avg: i96 = std.math.maxInt(i96);
+            var min: i96 = std.math.maxInt(i96);
+            var max: i96 = 0;
+            var sum: i96 = 0;
             for (results) |x| {
                 sum += x;
                 if (x < min) min = x;
@@ -120,22 +128,22 @@ pub fn Benchmark() type {
         }
 
         /// Start timer for bencharking instance
-        pub fn start(self: *Self, name: []const u8) !void {
+        pub fn start(self: *Self, io: Io, name: []const u8) !void {
             self._current_name = name;
-            self._timer.reset();
+            self._timer = Io.Timestamp.now(io, Io.Clock.awake);
         }
 
         /// Stop timer (and record) for bencharking instance
-        pub fn stop(self: *Self) Result {
+        pub fn stop(self: *Self, io: Io) Result {
             std.debug.assert(self.current < self.size);
 
-            const t = self._timer.lap();
+            const t = self._timer.untilNow(io, Io.Clock.awake);
 
             const final_result = Result{
                 .name = self._current_name,
-                .avg = t,
-                .min = t,
-                .max = t,
+                .avg = t.toNanoseconds(),
+                .min = t.toNanoseconds(),
+                .max = t.toNanoseconds(),
             };
 
             self.results[self.current] = final_result;
@@ -148,7 +156,7 @@ pub fn Benchmark() type {
         }
 
         /// Print results
-        pub fn printResults(self: Self, writer: *std.Io.Writer, header: []const u8) !void {
+        pub fn printResults(self: Self, writer: *Io.Writer, header: []const u8) !void {
             if (header.len > 0) {
                 try writer.print("# {s}\n", .{header});
             }
@@ -181,6 +189,44 @@ pub fn Benchmark() type {
     };
 }
 
+/// Contains file and writer for creating benchmark reports
+/// This is a helper for creating and writing to benchmark reports
+/// Note: filename must start with '_benchmark', this is to
+/// provide a safey bounndary so you don't overwrite normal files
+pub const ReportWriter = struct {
+    // Filehandle
+    _file: Io.File,
+    // File writer
+    _writer: Io.File.Writer,
+
+    const Self = @This();
+
+    /// Init ReportWriter
+    pub fn init(io: Io, file_name: []const u8, buffer: []u8) !Self {
+        if (!std.mem.startsWith(u8, file_name, "_benchmark")) {
+            return BenchmarkError.InvalidReportPath;
+        }
+
+        const file = try Io.Dir.createFile(.cwd(), io, file_name, .{});
+        errdefer file.close(io);
+
+        return Self{
+            ._file = file,
+            ._writer = file.writer(io, buffer),
+        };
+    }
+
+    /// Deinit and close file
+    pub fn deinit(self: *Self, io: Io) void {
+        self._file.close(io);
+    }
+
+    /// Provide a writer
+    pub fn writer(self: *Self) *Io.Writer {
+        return &self._writer.interface;
+    }
+};
+
 ////////
 // Tests
 
@@ -191,92 +237,129 @@ fn getBenchmarkMode() Mode {
 
 /// Example function for testing benchmark
 fn example() void {
-    std.debug.print("example\n", .{});
+    var total: usize = 0;
+    for (0..10) |i| {
+        total += i * 2;
+    }
 }
 
 test "Example usage - One run" {
-    var da = std.heap.DebugAllocator(.{}).init;
-    defer _ = da.deinit();
-    const allocator = da.allocator();
+    const report_file = "_benchmark/benchmark_example_one_run";
 
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-    const stdout = &stdout_writer.interface;
+    const io = std.testing.io;
+    const allocator = std.testing.allocator;
+    var buffer: [1024]u8 = undefined;
 
-    var bench = try Benchmark().init(allocator, .{ .mode = getBenchmarkMode(), .size = 1 });
+    var report = try ReportWriter.init(io, report_file, &buffer);
+    defer report.deinit(io);
+
+    var bench = try Benchmark().init(io, allocator, .{
+        .mode = getBenchmarkMode(),
+        .size = 1,
+    });
     defer bench.deinit(allocator);
-    const results = try bench.run("example", 2, example);
-    // try stdout.print("{s}: {d} {d} {d}\n", .{ results.name, results.avg, results.min, results.max });
+
+    const results = try bench.run(io, "example - one run", 2, example);
+    try report.writer().print("{s}: {d} {d} {d}\n", .{
+        results.name,
+        results.avg,
+        results.min,
+        results.max,
+    });
 
     try std.testing.expect(results.avg > 0);
-    try std.testing.expect(results.avg < 10000);
+    try std.testing.expect(results.avg < 1000000);
 
-    try stdout.flush();
+    try report.writer().flush();
 }
 
 test "Example usage - Multiple runs " {
-    var da = std.heap.DebugAllocator(.{}).init;
-    defer _ = da.deinit();
-    const allocator = da.allocator();
+    const report_file = "_benchmark/benchmark_example_multiple_runs";
 
-    var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
-    const stdout = &stdout_writer.interface;
+    const io = std.testing.io;
+    const allocator = std.testing.allocator;
+    var buffer: [1024]u8 = undefined;
 
-    var bench = try Benchmark().init(allocator, .{ .mode = getBenchmarkMode(), .size = 2 });
+    var report = try ReportWriter.init(io, report_file, &buffer);
+    defer report.deinit(io);
+
+    var bench = try Benchmark().init(io, allocator, .{
+        .mode = getBenchmarkMode(),
+        .size = 2,
+    });
     defer bench.deinit(allocator);
 
-    _ = try bench.run("example1", 2, example);
-    _ = try bench.run("example2", 2, example);
-    // try bench.printResults(stdout);
+    _ = try bench.run(io, "example1", 2, example);
+    _ = try bench.run(io, "example2", 2, example);
+    try bench.printResults(report.writer(), "multiple runs");
 
     try std.testing.expect(bench.current == 2);
 
-    try stdout.flush();
+    try report.writer().flush();
 }
 
 test "Example usage - Separate blocks" {
-    // This test would only run in benchmark mode
-    //if (getMode() == .smoke) return;
+    const report_file = "_benchmark/benchmark_example_separate_blocks";
 
-    var da = std.heap.DebugAllocator(.{}){};
-    defer _ = da.deinit();
-    const allocator = da.allocator();
+    const io = std.testing.io;
+    const allocator = std.testing.allocator;
+    var buffer: [1024]u8 = undefined;
 
-    var stderr_buffer: [1024]u8 = undefined;
-    var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
-    const stderr = &stderr_writer.interface;
+    var report = try ReportWriter.init(io, report_file, &buffer);
+    defer report.deinit(io);
 
-    var bench = try Benchmark().init(allocator, .{ .mode = getBenchmarkMode(), .size = 3 });
+    var bench = try Benchmark().init(io, allocator, .{
+        .mode = getBenchmarkMode(),
+        .size = 3,
+    });
     defer bench.deinit(allocator);
 
     {
-        try bench.start("example1");
+        try bench.start(io, "example1");
         example();
-        _ = bench.stop();
+        _ = bench.stop(io);
     }
     {
-        try bench.start("example2");
+        try bench.start(io, "example2");
         example();
-        _ = bench.stop();
+        _ = bench.stop(io);
     }
     {
-        try bench.start("example3");
+        try bench.start(io, "example3");
         example();
-        _ = bench.stop();
+        _ = bench.stop(io);
     }
 
-    try bench.printResults(stderr, "Examples");
+    try bench.printResults(report.writer(), "Examples");
 
-    try stderr.flush();
+    try report.writer().flush();
 }
 
 test "benchmark parameter test" {
+    // This test only runs in benchmark mode
     // Example: zig build test -- benchmark
+    if (getBenchmarkMode() != .benchmark) return;
+    const report_file = "_benchmark/benchmark_parameter_test";
 
-    std.debug.print("MODE: {any}\n", .{getBenchmarkMode()});
+    const io = std.testing.io;
+    var buffer: [1024]u8 = undefined;
 
-    if (getBenchmarkMode() == .smoke) return;
+    var report = try ReportWriter.init(io, report_file, &buffer);
+    defer report.deinit(io);
 
-    std.debug.print("running a fake benchmark...\n", .{});
+    try report.writer().print("running a fake benchmark...\n", .{});
+    try report.writer().print("Now: {any}\n", .{Io.Timestamp.now(io, Io.Clock.real).toSeconds()});
+
+    try report.writer().flush();
+}
+
+test "ReportWriter - InvalidReportPath check" {
+    const report_file = "BAD_benchmark/reportwriter_invalidreportpath_check";
+
+    const io = std.testing.io;
+    var buffer: [1024]u8 = undefined;
+
+    const report = ReportWriter.init(io, report_file, &buffer);
+
+    try std.testing.expect(report == BenchmarkError.InvalidReportPath);
 }
