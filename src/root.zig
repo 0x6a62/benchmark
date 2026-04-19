@@ -227,12 +227,18 @@ pub const ReportWriter = struct {
     }
 };
 
+/// Get benchmarking mode
+pub fn getBenchmarkMode() Mode {
+    return if (@import("test_options").benchmark) .benchmark else .smoke;
+}
+
 ////////
 // Tests
 
 /// Get benchmarking mode
-fn getBenchmarkMode() Mode {
-    return if (@import("test_options").benchmark) .benchmark else .smoke;
+/// This is specifically for testing the benchmark code
+fn getTestBenchmarkMode() Mode {
+    return if (@import("test_options").test_benchmark) .benchmark else .smoke;
 }
 
 /// Example function for testing benchmark
@@ -254,7 +260,7 @@ test "Example usage - One run" {
     defer report.deinit(io);
 
     var bench = try Benchmark().init(io, allocator, .{
-        .mode = getBenchmarkMode(),
+        .mode = getTestBenchmarkMode(),
         .size = 1,
     });
     defer bench.deinit(allocator);
@@ -284,7 +290,7 @@ test "Example usage - Multiple runs " {
     defer report.deinit(io);
 
     var bench = try Benchmark().init(io, allocator, .{
-        .mode = getBenchmarkMode(),
+        .mode = getTestBenchmarkMode(),
         .size = 2,
     });
     defer bench.deinit(allocator);
@@ -309,7 +315,7 @@ test "Example usage - Separate blocks" {
     defer report.deinit(io);
 
     var bench = try Benchmark().init(io, allocator, .{
-        .mode = getBenchmarkMode(),
+        .mode = getTestBenchmarkMode(),
         .size = 3,
     });
     defer bench.deinit(allocator);
@@ -338,7 +344,7 @@ test "Example usage - Separate blocks" {
 test "benchmark parameter test" {
     // This test only runs in benchmark mode
     // Example: zig build test -- benchmark
-    if (getBenchmarkMode() != .benchmark) return;
+    if (getTestBenchmarkMode() != .benchmark) return;
     const report_file = "_benchmark/benchmark_parameter_test";
 
     const io = std.testing.io;

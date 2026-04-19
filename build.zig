@@ -136,7 +136,7 @@ pub fn build(b: *std.Build) void {
     // Benchmark supports running in two modes.
     // - ./zig/zig build test
     // - ./zig/zig build --Doptimize=ReleaseFast fast test -- benchmark
-    test_options.addOption(bool, "benchmark", for (b.args orelse &.{}) |arg| {
+    test_options.addOption(bool, "test_benchmark", for (b.args orelse &.{}) |arg| {
         if (std.mem.indexOf(u8, arg, "benchmark") != null) break true;
     } else false);
     // mod.root_module.addOptions("test_options", test_options);
