@@ -228,8 +228,8 @@ pub const ReportWriter = struct {
 };
 
 /// Get benchmarking mode
-pub fn getBenchmarkMode() Mode {
-    return if (@import("test_options").benchmark) .benchmark else .smoke;
+pub fn getMode() Mode {
+    return if (@import("caller_options").benchmark_arg) .benchmark else .smoke;
 }
 
 ////////

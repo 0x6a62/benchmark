@@ -41,6 +41,14 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
 
+    // Receive arguments
+    const benchmark_arg = b.option(bool, "benchmark_arg", "Enable benchmarking") orelse false;
+
+    // Use arguments
+    const caller_options = b.addOptions();
+    caller_options.addOption(bool, "benchmark_arg", benchmark_arg);
+    mod.addOptions("caller_options", caller_options);
+
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
     // to the module defined above, it's sometimes preferable to split business
